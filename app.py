@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import pandas as pd
 from utils.data_fetcher import fetch_stock_data
+from utils.news_fetcher import fetch_stock_news
 from models.predictions import (
     get_linear_regression_prediction,
     get_random_forest_prediction,
@@ -54,14 +55,30 @@ if st.sidebar.button("Analyze"):
             # Display stock info
             stock = yf.Ticker(stock_symbol)
             info = stock.info
+            company_name = info.get('longName', stock_symbol)
 
-            col1, col2, col3 = st.columns(3)
+            # Create two columns for stock info and latest news
+            col1, col2 = st.columns([2, 1])
+
             with col1:
-                st.metric("Current Price", f"${info['currentPrice']:.2f}")
+                st.subheader("Stock Information")
+                metric1, metric2, metric3 = st.columns(3)
+                with metric1:
+                    st.metric("Current Price", f"${info['currentPrice']:.2f}")
+                with metric2:
+                    st.metric("Market Cap", f"${info['marketCap']:,.0f}")
+                with metric3:
+                    st.metric("Volume", f"{info['volume']:,}")
+
             with col2:
-                st.metric("Market Cap", f"${info['marketCap']:,.0f}")
-            with col3:
-                st.metric("Volume", f"{info['volume']:,}")
+                st.subheader("Latest News")
+                news = fetch_stock_news(stock_symbol, company_name)
+                if news:
+                    for article in news[:3]:  # Show top 3 news items
+                        with st.expander(article['title']):
+                            st.write(article['description'])
+                            st.markdown(f"[Read more]({article['url']})")
+                            st.caption(f"Source: {article['source']} | {article['publishedAt']}")
 
             # Plot historical data
             st.subheader("Historical Price Data")
@@ -128,5 +145,5 @@ st.sidebar.markdown("""
 2. Select the historical data period
 3. Choose the number of days to predict
 4. Select a prediction model
-5. Click 'Analyze' to see predictions
+5. Click 'Analyze' to see predictions and news
 """)
