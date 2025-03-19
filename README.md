@@ -50,18 +50,19 @@ pip install streamlit yfinance pandas numpy scikit-learn xgboost plotly requests
 
 5. Run the app:
 ```bash
-streamlit run app.py
+# For local development
+streamlit run app.py --server.port 5000
 ```
 
-The app will open in your default web browser at `http://localhost:8501`
+The app will open in your default web browser at `http://localhost:5000`
 
 ## Usage
 
 1. Enter a stock symbol (e.g., AAPL for Apple)
 2. Select the historical data period
 3. Choose technical indicators to display
-4. Select prediction model and forecast period
-5. Click 'Analyze' to see predictions and analysis
+4. Select prediction model and days
+5. Click 'Analyze' to see analysis and predictions
 
 ## Technical Indicators
 
