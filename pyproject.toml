@@ -11,5 +11,6 @@ dependencies = [
     "statsmodels>=0.14.4",
     "streamlit>=1.43.2",
     "tensorflow>=2.14.0",
+    "xgboost>=3.0.0",
     "yfinance>=0.2.54",
 ]
