@@ -5,6 +5,12 @@ import plotly.graph_objects as go
 import pandas as pd
 from utils.data_fetcher import fetch_stock_data
 from utils.news_fetcher import fetch_stock_news
+from utils.technical_analysis import (
+    calculate_sma,
+    calculate_bollinger_bands,
+    calculate_macd,
+    calculate_rsi
+)
 from models.predictions import (
     get_linear_regression_prediction,
     get_random_forest_prediction,
@@ -12,10 +18,8 @@ from models.predictions import (
     get_knn_prediction,
     get_xgboost_prediction
 )
-from models.evaluation import calculate_metrics
 
 st.set_page_config(page_title="Stock Market Predictor", layout="wide")
-
 st.title("Stock Market Prediction App")
 
 # Sidebar inputs
@@ -27,14 +31,25 @@ period = st.sidebar.selectbox(
     index=0
 )
 
+# Technical Analysis Settings
+st.sidebar.subheader("Technical Indicators")
+show_sma = st.sidebar.checkbox("Show SMA", value=True)
+sma_period = st.sidebar.number_input("SMA Period", min_value=5, max_value=200, value=20)
+
+show_bollinger = st.sidebar.checkbox("Show Bollinger Bands", value=False)
+bollinger_std = st.sidebar.number_input("Bollinger Std Dev", min_value=1, max_value=4, value=2)
+
+show_macd = st.sidebar.checkbox("Show MACD", value=False)
+show_rsi = st.sidebar.checkbox("Show RSI", value=False)
+
+# Prediction Settings
+st.sidebar.subheader("Prediction Settings")
 prediction_days = st.sidebar.slider(
     "Prediction Days",
     min_value=1,
     max_value=30,
     value=7
 )
-
-# Model selection
 selected_model = st.sidebar.selectbox(
     "Select Prediction Model",
     options=[
@@ -50,7 +65,6 @@ if st.sidebar.button("Analyze"):
     try:
         # Fetch data
         df = fetch_stock_data(stock_symbol, period)
-
         if df is not None and not df.empty:
             # Display stock info
             stock = yf.Ticker(stock_symbol)
@@ -59,7 +73,6 @@ if st.sidebar.button("Analyze"):
 
             # Create two columns for stock info and latest news
             col1, col2 = st.columns([2, 1])
-
             with col1:
                 st.subheader("Stock Information")
                 metric1, metric2, metric3 = st.columns(3)
@@ -74,25 +87,97 @@ if st.sidebar.button("Analyze"):
                 st.subheader("Latest News")
                 news = fetch_stock_news(stock_symbol, company_name)
                 if news:
-                    for article in news[:3]:  # Show top 3 news items
+                    for article in news[:3]:
                         with st.expander(article['title']):
                             st.write(article['description'])
                             st.markdown(f"[Read more]({article['url']})")
                             st.caption(f"Source: {article['source']} | {article['publishedAt']}")
 
-            # Plot historical data
-            st.subheader("Historical Price Data")
+            # Technical Analysis Section
+            st.subheader("Technical Analysis")
+
+            # Create main price chart with technical indicators
             fig = go.Figure()
+
+            # Add candlestick chart
             fig.add_trace(go.Candlestick(
                 x=df.index,
                 open=df['Open'],
                 high=df['High'],
                 low=df['Low'],
-                close=df['Close']
+                close=df['Close'],
+                name="Price"
             ))
+
+            # Add SMA
+            if show_sma:
+                sma = calculate_sma(df, window=sma_period)
+                fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=sma,
+                    name=f"SMA ({sma_period})",
+                    line=dict(color='orange')
+                ))
+
+            # Add Bollinger Bands
+            if show_bollinger:
+                sma, upper, lower = calculate_bollinger_bands(df, window=sma_period, num_std=bollinger_std)
+                fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=upper,
+                    name='Upper Band',
+                    line=dict(color='gray', dash='dash')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=lower,
+                    name='Lower Band',
+                    line=dict(color='gray', dash='dash'),
+                    fill='tonexty'
+                ))
+
             st.plotly_chart(fig, use_container_width=True)
 
-            # Generate prediction for selected model
+            # Add MACD and RSI in separate charts if selected
+            if show_macd:
+                macd, signal, histogram = calculate_macd(df)
+                macd_fig = go.Figure()
+                macd_fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=macd,
+                    name='MACD',
+                    line=dict(color='blue')
+                ))
+                macd_fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=signal,
+                    name='Signal',
+                    line=dict(color='orange')
+                ))
+                macd_fig.add_trace(go.Bar(
+                    x=df.index,
+                    y=histogram,
+                    name='Histogram'
+                ))
+                macd_fig.update_layout(title="MACD")
+                st.plotly_chart(macd_fig, use_container_width=True)
+
+            if show_rsi:
+                rsi = calculate_rsi(df)
+                rsi_fig = go.Figure()
+                rsi_fig.add_trace(go.Scatter(
+                    x=df.index,
+                    y=rsi,
+                    name='RSI',
+                    line=dict(color='purple')
+                ))
+                rsi_fig.add_hline(y=70, line_dash="dash", line_color="red")
+                rsi_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                rsi_fig.update_layout(title="RSI")
+                st.plotly_chart(rsi_fig, use_container_width=True)
+
+            # Predictions Section
+            st.subheader("Price Predictions")
             prediction_funcs = {
                 "Linear Regression": get_linear_regression_prediction,
                 "Random Forest": get_random_forest_prediction,
@@ -103,9 +188,6 @@ if st.sidebar.button("Analyze"):
 
             with st.spinner(f'Generating {selected_model} predictions...'):
                 predictions = prediction_funcs[selected_model](df, prediction_days)
-
-                # Display predictions
-                st.subheader(f"{selected_model} Predictions")
                 pred_fig = go.Figure()
 
                 # Plot historical data
@@ -143,7 +225,7 @@ st.sidebar.markdown("""
 ### Usage Instructions:
 1. Enter the stock symbol (e.g., AAPL for Apple)
 2. Select the historical data period
-3. Choose the number of days to predict
-4. Select a prediction model
-5. Click 'Analyze' to see predictions and news
+3. Choose technical indicators to display
+4. Select prediction model and days
+5. Click 'Analyze' to see analysis and predictions
 """)
