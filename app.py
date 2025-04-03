@@ -19,8 +19,8 @@ from models.predictions import (
     get_xgboost_prediction
 )
 
-st.set_page_config(page_title="Stock Market Predictor", layout="wide")
-st.title("Stock Market Prediction App")
+st.set_page_config(page_title="IntelliTrade", layout="wide")
+st.title("IntelliTrade - Stock Market Prediction App")
 
 # Sidebar inputs
 st.sidebar.header("Settings")

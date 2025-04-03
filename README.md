@@ -1,4 +1,4 @@
-# Stock Market Prediction App
+# IntelliTrade - Stock Market Prediction App
 
 A Streamlit-based application for stock market prediction using multiple ML algorithms and real-time data analysis. The app provides technical analysis indicators and news integration for comprehensive stock analysis.
 

@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
 from xgboost import XGBRegressor
 from sklearn.preprocessing import MinMaxScaler
 import streamlit as st
