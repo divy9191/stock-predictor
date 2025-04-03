@@ -235,6 +235,15 @@ def create_pdf_report(stock_symbol, company_name, current_price, predictions, mo
     return buffer
 
 # Main application logic based on selected mode
+# Check for session state redirection
+if 'stock_for_analysis' in st.session_state and 'mode_for_redirect' in st.session_state:
+    # Handle redirection
+    stock_symbol = st.session_state.stock_for_analysis
+    app_mode = st.session_state.mode_for_redirect
+    # Clear the session state
+    del st.session_state.stock_for_analysis
+    del st.session_state.mode_for_redirect
+
 if app_mode == "Stock Analysis":
     # Display description and instructional tab
     with st.expander("ℹ️ About Stock Analysis Mode", expanded=False):
