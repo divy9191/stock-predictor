@@ -33,6 +33,13 @@ ENV/
 *.swp
 *.swo
 
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml.bak
+
+# Jupyter
+.ipynb_checkpoints/
+
 # Misc
 .DS_Store
 .coverage
@@ -41,3 +48,6 @@ coverage.xml
 *.cover
 *.log
 .cache
+
+# Generated reports
+/reports/*.pdf
