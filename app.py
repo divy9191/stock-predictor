@@ -22,8 +22,20 @@ from models.predictions import (
 st.set_page_config(page_title="IntelliTrade", layout="wide")
 st.title("IntelliTrade - Stock Market Prediction App")
 
-# Sidebar inputs
+# Initialize session state for watchlist
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+
+# Sidebar sections
 st.sidebar.header("Settings")
+
+# Navigation
+app_mode = st.sidebar.radio(
+    "Navigation",
+    options=["Stock Analysis", "Model Comparison", "Watchlist"]
+)
+
+# Common settings for all modes
 stock_symbol = st.sidebar.text_input("Enter Stock Symbol", value="AAPL")
 period = st.sidebar.selectbox(
     "Select Time Period",
@@ -50,175 +62,441 @@ prediction_days = st.sidebar.slider(
     max_value=30,
     value=7
 )
-selected_model = st.sidebar.selectbox(
-    "Select Prediction Model",
-    options=[
-        "Linear Regression",
-        "Random Forest",
-        "Extra Trees",
-        "KNN",
-        "XGBoost"
-    ]
-)
 
-if st.sidebar.button("Analyze"):
-    try:
-        # Fetch data
-        df = fetch_stock_data(stock_symbol, period)
-        if df is not None and not df.empty:
-            # Display stock info
-            stock = yf.Ticker(stock_symbol)
-            info = stock.info
-            company_name = info.get('longName', stock_symbol)
+# Initialize model selection variables
+selected_model = "Linear Regression"  # Default value
+selected_models = ["Linear Regression", "Random Forest", "XGBoost"]  # Default values
 
-            # Create two columns for stock info and latest news
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.subheader("Stock Information")
-                metric1, metric2, metric3 = st.columns(3)
-                with metric1:
-                    st.metric("Current Price", f"${info['currentPrice']:.2f}")
-                with metric2:
-                    st.metric("Market Cap", f"${info['marketCap']:,.0f}")
-                with metric3:
-                    st.metric("Volume", f"{info['volume']:,}")
+# Model selection based on mode
+if app_mode == "Stock Analysis":
+    selected_model = st.sidebar.selectbox(
+        "Select Prediction Model",
+        options=[
+            "Linear Regression",
+            "Random Forest", 
+            "Extra Trees",
+            "KNN",
+            "XGBoost"
+        ]
+    )
+elif app_mode == "Model Comparison":
+    selected_models = st.sidebar.multiselect(
+        "Select Models to Compare",
+        options=[
+            "Linear Regression",
+            "Random Forest",
+            "Extra Trees", 
+            "KNN",
+            "XGBoost"
+        ],
+        default=["Linear Regression", "Random Forest", "XGBoost"]
+    )
+elif app_mode == "Watchlist":
+    new_stock = st.sidebar.text_input("Add Stock to Watchlist")
+    if st.sidebar.button("Add to Watchlist") and new_stock:
+        if new_stock not in st.session_state.watchlist:
+            st.session_state.watchlist.append(new_stock)
+            st.sidebar.success(f"Added {new_stock} to watchlist!")
+        else:
+            st.sidebar.info(f"{new_stock} is already in your watchlist")
+            
+    if st.session_state.watchlist and st.sidebar.button("Clear Watchlist"):
+        st.session_state.watchlist = []
+        st.sidebar.info("Watchlist cleared")
 
-            with col2:
-                st.subheader("Latest News")
-                news = fetch_stock_news(stock_symbol, company_name)
-                if news:
-                    for article in news[:3]:
-                        with st.expander(article['title']):
-                            st.write(article['description'])
-                            st.markdown(f"[Read more]({article['url']})")
-                            st.caption(f"Source: {article['source']} | {article['publishedAt']}")
+# Import required libraries for PDF
+import io
+from fpdf import FPDF
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import base64
 
-            # Technical Analysis Section
-            st.subheader("Technical Analysis")
+# Function to create a PDF report
+def create_pdf_report(stock_symbol, company_name, current_price, predictions, model_name, period):
+    buffer = io.BytesIO()
+    
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    
+    # Title
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(50, height - 50, f"IntelliTrade Stock Analysis Report: {company_name} ({stock_symbol})")
+    
+    # General information
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, height - 80, "Stock Information")
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(50, height - 100, f"Current Price: ${current_price:.2f}")
+    pdf.drawString(50, height - 120, f"Analysis Period: {period}")
+    pdf.drawString(50, height - 140, f"Report Date: {datetime.now().strftime('%Y-%m-%d')}")
+    
+    # Prediction information
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, height - 180, f"Price Predictions ({model_name})")
+    
+    y_pos = height - 200
+    pdf.setFont("Helvetica", 10)
+    for i, (date, price) in enumerate(zip(predictions["Date"], predictions["Predicted Price"])):
+        date_str = date.strftime("%Y-%m-%d")
+        pdf.drawString(50, y_pos - (i * 20), f"{date_str}: ${price:.2f}")
+    
+    # Add footer
+    pdf.setFont("Helvetica-Italic", 8)
+    pdf.drawString(50, 30, "Generated by IntelliTrade Stock Prediction App")
+    pdf.drawString(50, 20, "Disclaimer: This report is for informational purposes only and should not be considered investment advice.")
+    
+    pdf.save()
+    buffer.seek(0)
+    return buffer
 
-            # Create main price chart with technical indicators
-            fig = go.Figure()
+# Main application logic based on selected mode
+if app_mode == "Stock Analysis":
+    if st.sidebar.button("Analyze"):
+        try:
+            # Fetch data
+            df = fetch_stock_data(stock_symbol, period)
+            if df is not None and not df.empty:
+                # Display stock info
+                stock = yf.Ticker(stock_symbol)
+                info = stock.info
+                company_name = info.get('longName', stock_symbol)
 
-            # Add candlestick chart
-            fig.add_trace(go.Candlestick(
-                x=df.index,
-                open=df['Open'],
-                high=df['High'],
-                low=df['Low'],
-                close=df['Close'],
-                name="Price"
-            ))
+                # Create two columns for stock info and latest news
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.subheader("Stock Information")
+                    metric1, metric2, metric3 = st.columns(3)
+                    with metric1:
+                        st.metric("Current Price", f"${info['currentPrice']:.2f}")
+                    with metric2:
+                        st.metric("Market Cap", f"${info['marketCap']:,.0f}")
+                    with metric3:
+                        st.metric("Volume", f"{info['volume']:,}")
 
-            # Add SMA
-            if show_sma:
-                sma = calculate_sma(df, window=sma_period)
-                fig.add_trace(go.Scatter(
+                with col2:
+                    st.subheader("Latest News")
+                    news = fetch_stock_news(stock_symbol, company_name)
+                    if news:
+                        for article in news[:3]:
+                            with st.expander(article['title']):
+                                st.write(article['description'])
+                                st.markdown(f"[Read more]({article['url']})")
+                                st.caption(f"Source: {article['source']} | {article['publishedAt']}")
+
+                # Technical Analysis Section
+                st.subheader("Technical Analysis")
+
+                # Create main price chart with technical indicators
+                fig = go.Figure()
+
+                # Add candlestick chart
+                fig.add_trace(go.Candlestick(
                     x=df.index,
-                    y=sma,
-                    name=f"SMA ({sma_period})",
-                    line=dict(color='orange')
+                    open=df['Open'],
+                    high=df['High'],
+                    low=df['Low'],
+                    close=df['Close'],
+                    name="Price"
                 ))
 
-            # Add Bollinger Bands
-            if show_bollinger:
-                sma, upper, lower = calculate_bollinger_bands(df, window=sma_period, num_std=bollinger_std)
-                fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=upper,
-                    name='Upper Band',
-                    line=dict(color='gray', dash='dash')
-                ))
-                fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=lower,
-                    name='Lower Band',
-                    line=dict(color='gray', dash='dash'),
-                    fill='tonexty'
-                ))
+                # Add SMA
+                if show_sma:
+                    sma = calculate_sma(df, window=sma_period)
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=sma,
+                        name=f"SMA ({sma_period})",
+                        line=dict(color='orange')
+                    ))
 
-            st.plotly_chart(fig, use_container_width=True)
+                # Add Bollinger Bands
+                if show_bollinger:
+                    sma, upper, lower = calculate_bollinger_bands(df, window=sma_period, num_std=bollinger_std)
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=upper,
+                        name='Upper Band',
+                        line=dict(color='gray', dash='dash')
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=lower,
+                        name='Lower Band',
+                        line=dict(color='gray', dash='dash'),
+                        fill='tonexty'
+                    ))
 
-            # Add MACD and RSI in separate charts if selected
-            if show_macd:
-                macd, signal, histogram = calculate_macd(df)
-                macd_fig = go.Figure()
-                macd_fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=macd,
-                    name='MACD',
-                    line=dict(color='blue')
-                ))
-                macd_fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=signal,
-                    name='Signal',
-                    line=dict(color='orange')
-                ))
-                macd_fig.add_trace(go.Bar(
-                    x=df.index,
-                    y=histogram,
-                    name='Histogram'
-                ))
-                macd_fig.update_layout(title="MACD")
-                st.plotly_chart(macd_fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
 
-            if show_rsi:
-                rsi = calculate_rsi(df)
-                rsi_fig = go.Figure()
-                rsi_fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=rsi,
-                    name='RSI',
-                    line=dict(color='purple')
-                ))
-                rsi_fig.add_hline(y=70, line_dash="dash", line_color="red")
-                rsi_fig.add_hline(y=30, line_dash="dash", line_color="green")
-                rsi_fig.update_layout(title="RSI")
-                st.plotly_chart(rsi_fig, use_container_width=True)
+                # Add MACD and RSI in separate charts if selected
+                if show_macd:
+                    macd, signal, histogram = calculate_macd(df)
+                    macd_fig = go.Figure()
+                    macd_fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=macd,
+                        name='MACD',
+                        line=dict(color='blue')
+                    ))
+                    macd_fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=signal,
+                        name='Signal',
+                        line=dict(color='orange')
+                    ))
+                    macd_fig.add_trace(go.Bar(
+                        x=df.index,
+                        y=histogram,
+                        name='Histogram'
+                    ))
+                    macd_fig.update_layout(title="MACD")
+                    st.plotly_chart(macd_fig, use_container_width=True)
 
-            # Predictions Section
-            st.subheader("Price Predictions")
-            prediction_funcs = {
-                "Linear Regression": get_linear_regression_prediction,
-                "Random Forest": get_random_forest_prediction,
-                "Extra Trees": get_extra_trees_prediction,
-                "KNN": get_knn_prediction,
-                "XGBoost": get_xgboost_prediction
-            }
+                if show_rsi:
+                    rsi = calculate_rsi(df)
+                    rsi_fig = go.Figure()
+                    rsi_fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=rsi,
+                        name='RSI',
+                        line=dict(color='purple')
+                    ))
+                    rsi_fig.add_hline(y=70, line_dash="dash", line_color="red")
+                    rsi_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                    rsi_fig.update_layout(title="RSI")
+                    st.plotly_chart(rsi_fig, use_container_width=True)
 
-            with st.spinner(f'Generating {selected_model} predictions...'):
-                predictions = prediction_funcs[selected_model](df, prediction_days)
-                pred_fig = go.Figure()
+                # Predictions Section
+                st.subheader("Price Predictions")
+                prediction_funcs = {
+                    "Linear Regression": get_linear_regression_prediction,
+                    "Random Forest": get_random_forest_prediction,
+                    "Extra Trees": get_extra_trees_prediction,
+                    "KNN": get_knn_prediction,
+                    "XGBoost": get_xgboost_prediction
+                }
 
-                # Plot historical data
-                pred_fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=df['Close'],
-                    name="Historical",
-                    line=dict(color='black')
-                ))
+                with st.spinner(f'Generating {selected_model} predictions...'):
+                    predictions = prediction_funcs[selected_model](df, prediction_days)
+                    pred_fig = go.Figure()
 
-                # Plot predictions
-                pred_dates = [df.index[-1] + timedelta(days=i) for i in range(1, prediction_days + 1)]
-                pred_fig.add_trace(go.Scatter(
-                    x=pred_dates,
-                    y=predictions,
-                    name=f"{selected_model} Prediction",
-                    line=dict(color='blue', dash='dash')
-                ))
+                    # Plot historical data
+                    pred_fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['Close'],
+                        name="Historical",
+                        line=dict(color='black')
+                    ))
 
-                st.plotly_chart(pred_fig, use_container_width=True)
+                    # Plot predictions
+                    pred_dates = [df.index[-1] + timedelta(days=i) for i in range(1, prediction_days + 1)]
+                    pred_fig.add_trace(go.Scatter(
+                        x=pred_dates,
+                        y=predictions,
+                        name=f"{selected_model} Prediction",
+                        line=dict(color='blue', dash='dash')
+                    ))
 
-                # Display prediction values
-                st.subheader("Predicted Values")
-                pred_df = pd.DataFrame({
-                    'Date': pred_dates,
-                    'Predicted Price': predictions
-                })
-                st.dataframe(pred_df.set_index('Date'))
+                    st.plotly_chart(pred_fig, use_container_width=True)
 
-    except Exception as e:
-        st.error(f"Error occurred: {str(e)}")
+                    # Display prediction values
+                    st.subheader("Predicted Values")
+                    pred_df = pd.DataFrame({
+                        'Date': pred_dates,
+                        'Predicted Price': predictions
+                    })
+                    st.dataframe(pred_df.set_index('Date'))
+                    
+                    # Generate PDF Report
+                    st.subheader("Generate Report")
+                    with st.expander("Export Analysis as PDF"):
+                        if st.button("Generate PDF Report"):
+                            pdf_buffer = create_pdf_report(
+                                stock_symbol, 
+                                company_name, 
+                                info['currentPrice'], 
+                                pred_df, 
+                                selected_model,
+                                period
+                            )
+                            
+                            b64 = base64.b64encode(pdf_buffer.getvalue()).decode()
+                            href = f'<a href="data:application/pdf;base64,{b64}" download="{stock_symbol}_analysis.pdf">Download PDF Report</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+                            st.success("PDF report generated successfully!")
+
+        except Exception as e:
+            st.error(f"Error occurred: {str(e)}")
+
+elif app_mode == "Model Comparison":
+    if st.sidebar.button("Compare Models"):
+        if len(selected_models) < 2:
+            st.warning("Please select at least 2 models to compare.")
+        else:
+            try:
+                # Fetch data
+                df = fetch_stock_data(stock_symbol, period)
+                if df is not None and not df.empty:
+                    stock = yf.Ticker(stock_symbol)
+                    info = stock.info
+                    company_name = info.get('longName', stock_symbol)
+                    
+                    st.subheader(f"Model Comparison for {company_name} ({stock_symbol})")
+                    st.write(f"Current Price: ${info['currentPrice']:.2f}")
+                    
+                    # Set up prediction functions
+                    prediction_funcs = {
+                        "Linear Regression": get_linear_regression_prediction,
+                        "Random Forest": get_random_forest_prediction,
+                        "Extra Trees": get_extra_trees_prediction,
+                        "KNN": get_knn_prediction,
+                        "XGBoost": get_xgboost_prediction
+                    }
+                    
+                    # Calculate predictions for each model
+                    with st.spinner(f'Generating predictions for {len(selected_models)} models...'):
+                        pred_dates = [df.index[-1] + timedelta(days=i) for i in range(1, prediction_days + 1)]
+                        
+                        # Create figure for comparison
+                        comp_fig = go.Figure()
+                        
+                        # Add historical data
+                        comp_fig.add_trace(go.Scatter(
+                            x=df.index[-30:],  # Show last 30 days for clarity
+                            y=df['Close'][-30:],
+                            name="Historical",
+                            line=dict(color='black')
+                        ))
+                        
+                        # Create a DataFrame to hold all predictions
+                        all_predictions = pd.DataFrame({'Date': pred_dates})
+                        all_predictions.set_index('Date', inplace=True)
+                        
+                        # Add predictions from each model
+                        colors = ['blue', 'red', 'green', 'purple', 'orange']
+                        for i, model_name in enumerate(selected_models):
+                            model_preds = prediction_funcs[model_name](df, prediction_days)
+                            
+                            # Add to plot
+                            comp_fig.add_trace(go.Scatter(
+                                x=pred_dates,
+                                y=model_preds,
+                                name=f"{model_name}",
+                                line=dict(color=colors[i % len(colors)], dash='dash')
+                            ))
+                            
+                            # Add to DataFrame
+                            all_predictions[model_name] = model_preds
+                        
+                        # Show the comparison chart
+                        st.plotly_chart(comp_fig, use_container_width=True)
+                        
+                        # Show prediction values in a table
+                        st.subheader("Predicted Values by Model")
+                        st.dataframe(all_predictions)
+                        
+                        # Calculate average prediction
+                        all_predictions['Average'] = all_predictions.mean(axis=1)
+                        
+                        # Show statistics
+                        st.subheader("Prediction Statistics")
+                        stats_cols = st.columns(len(selected_models) + 1)
+                        
+                        for i, model_name in enumerate(selected_models):
+                            with stats_cols[i]:
+                                final_day_pred = all_predictions[model_name].iloc[-1]
+                                change = ((final_day_pred / info['currentPrice']) - 1) * 100
+                                st.metric(
+                                    model_name, 
+                                    f"${final_day_pred:.2f}", 
+                                    f"{change:.2f}%"
+                                )
+                        
+                        with stats_cols[-1]:
+                            avg_final = all_predictions['Average'].iloc[-1]
+                            avg_change = ((avg_final / info['currentPrice']) - 1) * 100
+                            st.metric(
+                                "Consensus", 
+                                f"${avg_final:.2f}", 
+                                f"{avg_change:.2f}%"
+                            )
+                        
+                        # Generate PDF Report for comparison
+                        st.subheader("Generate Report")
+                        with st.expander("Export Comparison as PDF"):
+                            if st.button("Generate Comparison PDF"):
+                                # In a real implementation, we would create a specialized PDF for comparisons
+                                # For now, we'll use a simple version
+                                pdf_buffer = create_pdf_report(
+                                    stock_symbol, 
+                                    company_name, 
+                                    info['currentPrice'], 
+                                    all_predictions.reset_index(), 
+                                    "Multiple Models",
+                                    period
+                                )
+                                
+                                b64 = base64.b64encode(pdf_buffer.getvalue()).decode()
+                                href = f'<a href="data:application/pdf;base64,{b64}" download="{stock_symbol}_comparison.pdf">Download Comparison PDF</a>'
+                                st.markdown(href, unsafe_allow_html=True)
+                                st.success("PDF comparison report generated successfully!")
+                
+            except Exception as e:
+                st.error(f"Error occurred: {str(e)}")
+
+elif app_mode == "Watchlist":
+    st.subheader("Your Stock Watchlist")
+    
+    if not st.session_state.watchlist:
+        st.info("Your watchlist is empty. Add stocks using the sidebar.")
+    else:
+        # Display watchlist in grid
+        num_cols = 3
+        rows = [st.session_state.watchlist[i:i+num_cols] for i in range(0, len(st.session_state.watchlist), num_cols)]
+        
+        for row in rows:
+            cols = st.columns(num_cols)
+            for i, symbol in enumerate(row):
+                with cols[i]:
+                    try:
+                        stock = yf.Ticker(symbol)
+                        info = stock.info
+                        price = info.get('currentPrice', 'N/A')
+                        change = info.get('regularMarketChangePercent', 0)
+                        
+                        # Show stock card
+                        st.subheader(f"{symbol}")
+                        st.caption(f"{info.get('longName', symbol)}")
+                        
+                        if price != 'N/A':
+                            st.metric("Price", f"${price:.2f}", f"{change:.2f}%" if change else None)
+                        else:
+                            st.write("Price information unavailable")
+                        
+                        # Quick action buttons
+                        cols2 = st.columns(2)
+                        with cols2[0]:
+                            if st.button(f"Analyze {symbol}", key=f"analyze_{symbol}"):
+                                # Set the stock symbol and redirect to analysis page
+                                st.session_state.stock_for_analysis = symbol
+                                st.session_state.mode_for_redirect = "Stock Analysis"
+                                st.rerun()
+                        with cols2[1]:
+                            if st.button(f"Remove", key=f"remove_{symbol}"):
+                                st.session_state.watchlist.remove(symbol)
+                                st.rerun()
+                    except Exception as e:
+                        st.warning(f"Error loading {symbol}: {str(e)}")
+        
+        # Handle any redirects from watchlist
+        if 'stock_for_analysis' in st.session_state and 'mode_for_redirect' in st.session_state:
+            # This would be handled better with proper state management in a real app
+            st.session_state.stock_symbol = st.session_state.stock_for_analysis
+            st.session_state.app_mode = st.session_state.mode_for_redirect
+            # Clear the redirect flags
+            del st.session_state.stock_for_analysis
+            del st.session_state.mode_for_redirect
+            st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
