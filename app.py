@@ -86,9 +86,21 @@ st.markdown("""
 st.markdown("<h1 class='main-header'>IntelliTrade</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; margin-bottom: 2rem;'>Advanced Stock Market Prediction Platform</p>", unsafe_allow_html=True)
 
-# Initialize session state for watchlist
+# Initialize session state variables
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+
+# Handle redirection from watchlist if needed
+if 'stock_for_analysis' in st.session_state and 'mode_for_redirect' in st.session_state:
+    # Save the redirection parameters (will be used later in the app logic)
+    redirect_symbol = st.session_state.stock_for_analysis
+    redirect_mode = st.session_state.mode_for_redirect
+    # Clear the session state to prevent infinite redirects
+    del st.session_state.stock_for_analysis
+    del st.session_state.mode_for_redirect
+else:
+    redirect_symbol = None
+    redirect_mode = None
 
 # Sidebar organization
 with st.sidebar:
@@ -97,9 +109,10 @@ with st.sidebar:
     # Navigation section
     st.markdown("### 🧭 Navigation")
     app_mode = st.radio(
-        "",
+        "Mode",
         options=["Stock Analysis", "Model Comparison", "Watchlist"],
-        key="app_mode_radio"
+        key="app_mode_radio",
+        label_visibility="collapsed"
     )
     
     # Create an expander for stock selection
@@ -234,15 +247,10 @@ def create_pdf_report(stock_symbol, company_name, current_price, predictions, mo
     buffer.seek(0)
     return buffer
 
-# Main application logic based on selected mode
-# Check for session state redirection
-if 'stock_for_analysis' in st.session_state and 'mode_for_redirect' in st.session_state:
-    # Handle redirection
-    stock_symbol = st.session_state.stock_for_analysis
-    app_mode = st.session_state.mode_for_redirect
-    # Clear the session state
-    del st.session_state.stock_for_analysis
-    del st.session_state.mode_for_redirect
+# Apply any redirection from watchlist
+if redirect_symbol is not None and redirect_mode is not None:
+    stock_symbol = redirect_symbol
+    app_mode = redirect_mode
 
 if app_mode == "Stock Analysis":
     # Display description and instructional tab
