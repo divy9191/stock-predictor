@@ -16,7 +16,10 @@ from models.predictions import (
     get_random_forest_prediction,
     get_extra_trees_prediction,
     get_knn_prediction,
-    get_xgboost_prediction
+    get_xgboost_prediction,
+    get_arima_prediction,
+    get_sarima_prediction,
+    get_exponential_smoothing_prediction
 )
 
 st.set_page_config(
@@ -120,8 +123,9 @@ with st.sidebar:
         stock_symbol = st.text_input("Enter Stock Symbol", value="AAPL")
         period = st.selectbox(
             "Historical Data Period",
-            options=["1y", "2y", "5y"],
-            index=0
+            options=["1y", "2y", "5y", "10y", "max"],
+            index=0,
+            help="Select the period of historical data to analyze. 'max' retrieves all available data."
         )
     
     # Create an expander for technical indicators
@@ -162,7 +166,10 @@ with st.sidebar:
                     "Random Forest", 
                     "Extra Trees",
                     "KNN",
-                    "XGBoost"
+                    "XGBoost",
+                    "ARIMA",
+                    "SARIMA",
+                    "Exponential Smoothing"
                 ]
             )
         elif app_mode == "Model Comparison":
@@ -173,7 +180,10 @@ with st.sidebar:
                     "Random Forest",
                     "Extra Trees", 
                     "KNN",
-                    "XGBoost"
+                    "XGBoost",
+                    "ARIMA",
+                    "SARIMA",
+                    "Exponential Smoothing"
                 ],
                 default=["Linear Regression", "Random Forest", "XGBoost"]
             )
@@ -464,7 +474,10 @@ if app_mode == "Stock Analysis":
                             "Random Forest": get_random_forest_prediction,
                             "Extra Trees": get_extra_trees_prediction,
                             "KNN": get_knn_prediction,
-                            "XGBoost": get_xgboost_prediction
+                            "XGBoost": get_xgboost_prediction,
+                            "ARIMA": get_arima_prediction,
+                            "SARIMA": get_sarima_prediction,
+                            "Exponential Smoothing": get_exponential_smoothing_prediction
                         }
                         
                         with st.spinner(f'Generating {selected_model} predictions...'):
@@ -639,7 +652,10 @@ elif app_mode == "Model Comparison":
                             "Random Forest": get_random_forest_prediction,
                             "Extra Trees": get_extra_trees_prediction,
                             "KNN": get_knn_prediction,
-                            "XGBoost": get_xgboost_prediction
+                            "XGBoost": get_xgboost_prediction,
+                            "ARIMA": get_arima_prediction,
+                            "SARIMA": get_sarima_prediction,
+                            "Exponential Smoothing": get_exponential_smoothing_prediction
                         }
                         
                         # Calculate predictions for each model
@@ -656,7 +672,10 @@ elif app_mode == "Model Comparison":
                                 "Random Forest": "#ff7f0e",      # orange
                                 "Extra Trees": "#2ca02c",        # green
                                 "KNN": "#d62728",                # red
-                                "XGBoost": "#9467bd"             # purple
+                                "XGBoost": "#9467bd",            # purple
+                                "ARIMA": "#8c564b",              # brown
+                                "SARIMA": "#e377c2",             # pink
+                                "Exponential Smoothing": "#7f7f7f" # gray
                             }
                             
                             # Generate predictions for each model
